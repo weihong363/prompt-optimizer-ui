@@ -55,21 +55,32 @@ class SpeechRecognitionService {
 
     // 当识别到语音结果时触发
     this.recognition.onresult = (event) => {
-      this.transcript = '';
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const transcript = event.results[i][0].transcript;
-        this.transcript += transcript;
-        
-        // 无论中间结果还是最终结果，都调用回调以实现实时识别效果
-        if (this.onResult) {
-          this.onResult(this.transcript);
+      // 正确累积结果：只使用最新的最终结果或当前的中间结果
+      let finalTranscript = '';
+      let interimTranscript = '';
+      
+      for (let i = 0; i < event.results.length; i++) {
+        const result = event.results[i][0];
+        if (result.isFinal) {
+          finalTranscript += result.transcript;
+        } else {
+          interimTranscript = result.transcript;
         }
+      }
+      
+      // 组合最终结果和当前中间结果
+      this.transcript = finalTranscript + interimTranscript;
+      
+      // 调用回调返回最新的识别结果
+      if (this.onResult) {
+        this.onResult(this.transcript);
       }
     };
 
     // 当开始识别时触发
     this.recognition.onstart = () => {
       this.isListening = true;
+      this.transcript = ''; // 开始新识别时重置转录文本
       if (this.onStart) {
         this.onStart();
       }
@@ -88,6 +99,11 @@ class SpeechRecognitionService {
       console.error('语音识别错误:', event.error);
       if (this.onError) {
         this.onError(event.error);
+      }
+      
+      // 处理network错误，自动重新连接
+      if (event.error === 'network') {
+        this.reconnect();
       }
     };
   }
